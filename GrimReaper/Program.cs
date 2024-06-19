@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -14,36 +16,33 @@ class Program
     private readonly string _apiHash;
     private readonly string _phoneNumber;
     private readonly string _apiLiquidity;
-    private static readonly Dictionary<string, bool> _addressDictionary = new Dictionary<string, bool>();
     private static readonly Program _program = new Program();
-    private static CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+    private static readonly Dictionary<string, bool> _mintAddresses = new Dictionary<string, bool>();
 
     public Program()
     {
-        _apiId = ConfigurationManager.AppSettings["api_id"];
+        _apiId = ConfigurationManager.AppSettings["app_id"];
         _apiHash = ConfigurationManager.AppSettings["api_hash"];
         _phoneNumber = ConfigurationManager.AppSettings["phone_number"];
         _apiLiquidity = ConfigurationManager.AppSettings["api_liquidity"];
     }
 
+    [Obsolete]
     static async Task Main(string[] args)
     {
-        await RunPeriodicallyAsync(TimeSpan.FromMinutes(5), _cancellationTokenSource.Token);
-    }
-
-    private static async Task RunPeriodicallyAsync(TimeSpan interval, CancellationToken cancellationToken)
-    {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            await _program.Run();
-            await Task.Delay(interval, cancellationToken);
-        }
+        var timer = new System.Threading.Timer(async _ => await _program.Run(), null, TimeSpan.Zero, TimeSpan.FromMinutes(5));
+        await Task.Delay(Timeout.Infinite);
     }
 
     [Obsolete]
     private async Task Run()
     {
-        using var client = new Client(Config);
+        var cancellationTokenSource = new CancellationTokenSource();
+
+        // Generate a unique session file name based on the process ID or other unique identifier
+        string sessionFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"WTelegram_{Guid.NewGuid()}.session");
+
+        using var client = new Client(Config, sessionStore: new FileStream(sessionFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
         try
         {
             await client.LoginUserIfNeeded();
@@ -56,7 +55,7 @@ class Program
             await FetchAndPrintMessagesAsync(client, botPeer);
 
             // Handle bot responses
-            await ListenToBotResponsesAsync(client, botPeer, _cancellationTokenSource.Token);
+            await ListenToBotResponsesAsync(client, botPeer, cancellationTokenSource.Token);
         }
         finally
         {
@@ -78,13 +77,12 @@ class Program
 
     private static async Task FetchAndPrintMessagesAsync(Client client, InputPeer botPeer)
     {
-        var history = await client.Messages_GetHistory(botPeer, limit: 10);
+        var history = await client.Messages_GetHistory(botPeer, limit: 40);
         foreach (var messageBase in history.Messages)
         {
             if (messageBase is Message message)
             {
                 string mintAddress = GetAddressFromBot(message.message);
-
                 if (!string.IsNullOrEmpty(mintAddress))
                 {
                     await ProcessMintAddressAsync(mintAddress);
@@ -93,49 +91,41 @@ class Program
         }
     }
 
-    [Obsolete]
     private static async Task ListenToBotResponsesAsync(Client client, InputPeer botPeer, CancellationToken cancellationToken)
     {
-        client.OnUpdate += async (updatesBase) =>
-        {
-            if (updatesBase is Updates updates)
-            {
-                foreach (var update in updates.UpdateList)
-                {
-                    if (update is UpdateNewMessage updateNewMessage)
-                    {
-                        if (updateNewMessage.message.Peer.ID == botPeer.ID)
-                        {
-                            if (updateNewMessage.message is Message message)
-                            {
-                                string mintAddress = GetAddressFromBot(message.message);
+        var updateManager = new UpdateManager(client, update => HandleUpdateAsync(update, botPeer));
 
-                                if (!string.IsNullOrEmpty(mintAddress))
-                                {
-                                    await ProcessMintAddressAsync(mintAddress);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            await Task.CompletedTask;
-        };
-
-        // Keep the application running to listen to updates
         try
         {
             await Task.Delay(Timeout.Infinite, cancellationToken);
         }
-        catch (TaskCanceledException)
+        catch (TaskCanceledException) { }
+    }
+
+    private static async Task HandleUpdateAsync(Update update, InputPeer botPeer)
+    {
+        if (update is UpdateNewChannelMessage updateNewMessage && updateNewMessage.message.Peer.ID == botPeer.ID)
         {
-            // Task was canceled, handle cleanup if necessary
+            if (updateNewMessage.message is Message message)
+            {
+                string mintAddress = GetAddressFromBot(message.message);
+                if (!string.IsNullOrEmpty(mintAddress))
+                {
+                    await ProcessMintAddressAsync(mintAddress);
+                }
+            }
         }
     }
 
+
     private static string GetAddressFromBot(string botMessage)
     {
-        return isValidSnipe(botMessage) ? ParseCoinAddress(botMessage) : string.Empty;
+        string address = string.Empty;
+        if (isValidSnipe(botMessage))
+        {
+            address = ParseCoinAddress(botMessage);
+        }
+        return address;
     }
 
     private static bool isValidSnipe(string preCoin)
@@ -146,40 +136,38 @@ class Program
     private static string ParseCoinAddress(string preCoin)
     {
         string pattern = @"🏠 Address:\s*(?<address>.+)\s*";
-        var match = Regex.Match(preCoin, pattern);
-
+        Match match = Regex.Match(preCoin, pattern);
         return match.Success ? match.Groups["address"].Value.Trim() : string.Empty;
     }
 
     private async Task<string> GetLiquidityPriceAsync(string mintAddress)
     {
-        string fullUrl = $"{_apiLiquidity}/v1/tokens/{mintAddress}/report";
-
-        using var client = new HttpClient();
-
+        string responseMsg = String.Empty;
         try
         {
+            string fullUrl = $"{_apiLiquidity.TrimEnd('/')}/v1/tokens/{mintAddress}/report";
+            using HttpClient client = new HttpClient();
+            client.DefaultRequestHeaders.Accept.Clear();
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             HttpResponseMessage response = await client.GetAsync(fullUrl);
             response.EnsureSuccessStatusCode();
+            responseMsg = await response.Content.ReadAsStringAsync();
 
-            return await response.Content.ReadAsStringAsync();
         }
-        catch (HttpRequestException e)
+        catch (Exception)
         {
-            Console.WriteLine($"\nException Caught! Message: {e.Message} Stack Trace: {e.StackTrace}");
-            return string.Empty;
+        //error: 400
         }
+        return responseMsg;
     }
 
     private static async Task<bool> IsRugSafeAddressAsync(string mintAddress)
     {
-        bool isSafe = false;
         string rugBodyResult = await _program.GetLiquidityPriceAsync(mintAddress);
-
-        using (JsonDocument document = JsonDocument.Parse(rugBodyResult))
+        if(!String.IsNullOrEmpty(rugBodyResult))
         {
+            using JsonDocument document = JsonDocument.Parse(rugBodyResult);
             JsonElement root = document.RootElement;
-
             if (root.TryGetProperty("markets", out JsonElement markets) && markets.ValueKind == JsonValueKind.Array && markets.GetArrayLength() > 0)
             {
                 JsonElement firstMarket = markets[0];
@@ -187,29 +175,23 @@ class Program
                 double basePrice = lp.GetProperty("basePrice").GetDouble();
                 double liquidityPrice = lp.GetProperty("baseUSD").GetDouble();
                 int score = root.GetProperty("score").GetInt32();
-
-                isSafe = basePrice == 0 && score < 20410 && liquidityPrice > 1000;
+                return basePrice == 0 && score < 20410 && liquidityPrice > 1000;
             }
         }
-
-        return isSafe;
+        return false;
     }
 
     private static async Task ProcessMintAddressAsync(string mintAddress)
     {
-        if (!_addressDictionary.ContainsKey(mintAddress))
+        if (!_mintAddresses.ContainsKey(mintAddress))
         {
-            _addressDictionary[mintAddress] = false;
             bool isSafe = await IsRugSafeAddressAsync(mintAddress);
+            _mintAddresses[mintAddress] = isSafe;
+            Console.WriteLine($"{mintAddress} is {(isSafe ? "Safe" : "Not Safe")}");
             if (isSafe)
             {
-                _addressDictionary[mintAddress] = true;
-                Console.WriteLine($"Safe address found: {mintAddress}");
-                _cancellationTokenSource.Cancel(); // Stop the periodic task
-            }
-            else
-            {
-                Console.WriteLine($"Address processed: {mintAddress}");
+                // Stop further processing if address is safe
+                Environment.Exit(0);
             }
         }
     }
