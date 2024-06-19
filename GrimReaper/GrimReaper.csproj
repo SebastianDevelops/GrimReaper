@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FreshTokenScanner\FreshTokenScanner.csproj" />
+    <ProjectReference Include="..\TelegramBot\TelegramBot.csproj" />
   </ItemGroup>
 
 </Project>
