@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
@@ -18,7 +20,9 @@ class Program
     private readonly string _phoneNumber;
     private readonly string _apiLiquidity;
     private static readonly Program _program = new Program();
-    private static readonly Dictionary<string, bool> _mintAddresses = new Dictionary<string, bool>();
+    private static readonly ConcurrentDictionary<string, bool> _invalidMintAddresses = new ConcurrentDictionary<string, bool>();
+    private static readonly ConcurrentDictionary<string, bool> _validMintAddresses = new ConcurrentDictionary<string, bool>();
+
     private Client _client;
 
     public Program()
@@ -111,6 +115,7 @@ class Program
 
     private static async Task HandleUpdateAsync(Update update, InputPeer botPeer)
     {
+        await CheckIfPreviousAddressValid(); // Check and update previously invalid addresses
         if (update is UpdateNewChannelMessage updateNewMessage && updateNewMessage.message.Peer.ID == botPeer.ID)
         {
             if (updateNewMessage.message is Message message)
@@ -136,15 +141,13 @@ class Program
             if (messageBase is Message message)
             {
                 string mintAddress = GetAddressFromBot(message.message);
-                if (!string.IsNullOrEmpty(mintAddress) && !_mintAddresses.ContainsKey(mintAddress))
+                if (!string.IsNullOrEmpty(mintAddress) && !_invalidMintAddresses.ContainsKey(mintAddress))
                 {
                     await ProcessMintAddressAsync(mintAddress);
                 }
             }
         }
     }
-
-
 
     private static string GetAddressFromBot(string botMessage)
     {
@@ -211,16 +214,61 @@ class Program
 
     private static async Task ProcessMintAddressAsync(string mintAddress)
     {
-        if (!_mintAddresses.ContainsKey(mintAddress))
+        // Check if the mintAddress is not already processed as invalid or valid
+        if (!_invalidMintAddresses.ContainsKey(mintAddress) && !_validMintAddresses.ContainsKey(mintAddress))
         {
-            bool isSafe = await IsRugSafeAddressAsync(mintAddress);
-            _mintAddresses[mintAddress] = isSafe;
+            bool isSafe = await SetSafetyLevel(mintAddress); // Determine safety level of the mintAddress
+
             Console.WriteLine($"{mintAddress} is {(isSafe ? "Safe" : "Not Safe")}");
+
             if (isSafe)
             {
-                // Stop further processing if address is safe
-                Environment.Exit(0);
+                // Gracefully handle stopping further processing if address is safe
+                // Example: Set a flag or signal to stop further processing
+                // Environment.Exit(0); // Avoid using Environment.Exit(0) unless absolutely necessary
             }
         }
+    }
+
+    private static async Task CheckIfPreviousAddressValid()
+    {
+        var tasks = new List<Task>();
+
+        // Iterate through previously invalid addresses
+        foreach (var key in _invalidMintAddresses.Keys)
+        {
+            if (!_invalidMintAddresses[key])
+            {
+                tasks.Add(SetSafetyLevel(key));
+            }
+            else
+            {
+                Console.WriteLine($"{key} is now true");
+            }
+        }
+
+        await Task.WhenAll(tasks); // Wait for all tasks to complete
+    }
+
+    private static async Task<bool> SetSafetyLevel(string mintAddress)
+    {
+        bool isSafe = false;
+
+        if (!string.IsNullOrEmpty(mintAddress))
+        {
+            isSafe = await IsRugSafeAddressAsync(mintAddress);
+
+            if (!isSafe)
+            {
+                _invalidMintAddresses.TryAdd(mintAddress, isSafe);
+            }
+            else
+            {
+                _validMintAddresses.TryAdd(mintAddress, isSafe);
+                Console.WriteLine($"{mintAddress} is now safe");
+            }
+        }
+
+        return isSafe;
     }
 }
