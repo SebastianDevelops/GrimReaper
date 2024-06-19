@@ -4,19 +4,20 @@ using System.Configuration;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using TelegramBot;
 using TL;
 using WTelegram;
 
 class Program
 {
-    private readonly string _apiId;
-    private readonly string _apiHash;
-    private readonly string _phoneNumber;
-    private readonly string _apiLiquidity;
+    private readonly string? _apiId;
+    private readonly string? _apiHash;
+    private readonly string? _phoneNumber;
+    private readonly string? _apiLiquidity;
 
     private static readonly Program _program = new Program();
     private static readonly ScanSolanaNet _scanSolana = new ScanSolanaNet();
-    
+    private static readonly MrMeeSeeks _mrMeeSeeks = new MrMeeSeeks();
 
     private static readonly ConcurrentDictionary<string, bool> _invalidMintAddresses = new ConcurrentDictionary<string, bool>();
     private static readonly ConcurrentDictionary<string, bool> _validMintAddresses = new ConcurrentDictionary<string, bool>();
@@ -44,6 +45,7 @@ class Program
     private async Task Run()
     {
         _mintAddresses = await _scanSolana.GetPreLaunchCoins();
+        await _mrMeeSeeks.Speak();
 
         await ReapSol();
     }
