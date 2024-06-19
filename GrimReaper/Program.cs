@@ -1,15 +1,8 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
+﻿using System.Collections.Concurrent;
 using System.Configuration;
-using System.Data;
-using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using TL;
 using WTelegram;
 
@@ -34,7 +27,6 @@ class Program
         _client = new Client(Config);
     }
 
-    
     static async Task Main(string[] args)
     {
         await _program.Run();
@@ -53,7 +45,6 @@ class Program
          */
         #endregion
 
-        //_client = new Client(Config);
         try
         {
             await _client.LoginUserIfNeeded();
@@ -223,9 +214,7 @@ class Program
 
             if (isSafe)
             {
-                // Gracefully handle stopping further processing if address is safe
-                // Example: Set a flag or signal to stop further processing
-                // Environment.Exit(0); // Avoid using Environment.Exit(0) unless absolutely necessary
+                //todo: place the actual limit order
             }
         }
     }
