@@ -29,7 +29,11 @@ class Program
 
     static async Task Main(string[] args)
     {
-        await _program.Run();
+        while (true)
+        {
+            await _program.Run();
+            await Task.Delay(TimeSpan.FromMinutes(5));
+        }
     }
 
     private async Task Run()
