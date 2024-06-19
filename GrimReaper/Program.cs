@@ -135,7 +135,7 @@ class Program
 
     private static async Task TryFetchALatesttMessagesAsync(Client client, InputPeer botPeer)
     {
-        var history = await client.Messages_GetHistory(botPeer, limit: 40);
+        var history = await client.Messages_GetHistory(botPeer, limit: 25);
         foreach (var messageBase in history.Messages)
         {
             if (messageBase is Message message)
