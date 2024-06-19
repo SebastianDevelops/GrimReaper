@@ -45,7 +45,6 @@ class Program
     private async Task Run()
     {
         _mintAddresses = await _scanSolana.GetPreLaunchCoins();
-        await _mrMeeSeeks.Speak();
 
         await ReapSol();
     }
