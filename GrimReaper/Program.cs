@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using FreshTokenScanner;
+using System.Collections.Concurrent;
 using System.Configuration;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -12,11 +13,14 @@ class Program
     private readonly string _apiHash;
     private readonly string _phoneNumber;
     private readonly string _apiLiquidity;
+
     private static readonly Program _program = new Program();
+    private static readonly ScanSolanaNet _scanSolana = new ScanSolanaNet();
+    
+
     private static readonly ConcurrentDictionary<string, bool> _invalidMintAddresses = new ConcurrentDictionary<string, bool>();
     private static readonly ConcurrentDictionary<string, bool> _validMintAddresses = new ConcurrentDictionary<string, bool>();
-
-    private Client _client;
+    private static List<string> _mintAddresses = new List<string>();
 
     public Program()
     {
@@ -24,8 +28,9 @@ class Program
         _apiHash = ConfigurationManager.AppSettings["api_hash"];
         _phoneNumber = ConfigurationManager.AppSettings["phone_number"];
         _apiLiquidity = ConfigurationManager.AppSettings["api_liquidity"];
-        _client = new Client(Config);
     }
+
+
 
     static async Task Main(string[] args)
     {
@@ -34,132 +39,31 @@ class Program
 
     private async Task Run()
     {
-        var cancellationTokenSource = new CancellationTokenSource();
+        _mintAddresses = await _scanSolana.GetPreLaunchCoins();
 
-        #region store custom session name
-        /*
-         // Generate a unique session file name based on the process ID or other unique identifier
-         string sessionFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"WTelegram_{Guid.NewGuid()}.session");
-
-          using var client = new Client(Config, sessionStore: new FileStream(sessionFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
-         */
-        #endregion
-
-        try
-        {
-            await _client.LoginUserIfNeeded();
-
-            // Interact with the bot
-            var botUsername = "solanascanner";
-            var botPeer = await _client.Contacts_ResolveUsername(botUsername);
-
-            // Fetch and print recent messages from the bot
-            await FetchAndPrintMessagesAsync(_client, botPeer);
-
-            // Handle bot responses
-            await ListenToBotResponsesAsync(_client, botPeer, cancellationTokenSource.Token);
-        }
-        finally
-        {
-            _client.Dispose();
-        }
+        await ReapSol();
     }
 
-    private string Config(string what)
+    private static async Task ReapSol()
     {
-        return what switch
+        await CheckIfPreviousAddressValid();
+        foreach (var address in _mintAddresses)
         {
-            "api_id" => _apiId,
-            "api_hash" => _apiHash,
-            "phone_number" => _phoneNumber,
-            "verification_code" => Console.ReadLine(),
-            _ => null,
-        };
-    }
-
-    private static async Task FetchAndPrintMessagesAsync(Client client, InputPeer botPeer)
-    {
-        var history = await client.Messages_GetHistory(botPeer, limit: 40);
-        foreach (var messageBase in history.Messages)
-        {
-            if (messageBase is Message message)
+            if (!String.IsNullOrEmpty(address) && 
+                !_invalidMintAddresses.ContainsKey(address) && 
+                !_validMintAddresses.ContainsKey(address))
             {
-                string mintAddress = GetAddressFromBot(message.message);
-                if (!string.IsNullOrEmpty(mintAddress))
-                {
-                    await ProcessMintAddressAsync(mintAddress);
-                }
+                await ProcessMintAddressAsync(address);
+            }
+            else if(String.IsNullOrEmpty(address))
+            {
+                throw new Exception("Address values cannot be null");
+            }
+            else if(_validMintAddresses.ContainsKey(address))
+            {
+                //TODO: do the actual limit order here
             }
         }
-    }
-
-    private static async Task ListenToBotResponsesAsync(Client client, InputPeer botPeer, CancellationToken cancellationToken)
-    {
-        var updateManager = new UpdateManager(client, update => HandleUpdateAsync(update, botPeer));
-
-        try
-        {
-            await Task.Delay(Timeout.Infinite, cancellationToken);
-        }
-        catch (TaskCanceledException) { }
-    }
-
-    private static async Task HandleUpdateAsync(Update update, InputPeer botPeer)
-    {
-        await CheckIfPreviousAddressValid(); // Check and update previously invalid addresses
-        if (update is UpdateNewChannelMessage updateNewMessage && updateNewMessage.message.Peer.ID == botPeer.ID)
-        {
-            if (updateNewMessage.message is Message message)
-            {
-                string mintAddress = GetAddressFromBot(message.message);
-                if (!string.IsNullOrEmpty(mintAddress))
-                {
-                    await ProcessMintAddressAsync(mintAddress);
-                }
-            }
-        }
-        else if (update is UpdateUserStatus getLatestMessages)
-        {
-            await TryFetchALatesttMessagesAsync(_program._client, botPeer);
-        }
-    }
-
-    private static async Task TryFetchALatesttMessagesAsync(Client client, InputPeer botPeer)
-    {
-        var history = await client.Messages_GetHistory(botPeer, limit: 25);
-        foreach (var messageBase in history.Messages)
-        {
-            if (messageBase is Message message)
-            {
-                string mintAddress = GetAddressFromBot(message.message);
-                if (!string.IsNullOrEmpty(mintAddress) && !_invalidMintAddresses.ContainsKey(mintAddress))
-                {
-                    await ProcessMintAddressAsync(mintAddress);
-                }
-            }
-        }
-    }
-
-    private static string GetAddressFromBot(string botMessage)
-    {
-        string address = string.Empty;
-        if (isValidSnipe(botMessage))
-        {
-            address = ParseCoinAddress(botMessage);
-        }
-        return address;
-    }
-
-    private static bool isValidSnipe(string preCoin)
-    {
-        return Regex.Matches(preCoin.ToLower(), "revoked").Count >= 3;
-    }
-
-    private static string ParseCoinAddress(string preCoin)
-    {
-        string pattern = @"🏠 Address:\s*(?<address>.+)\s*";
-        Match match = Regex.Match(preCoin, pattern);
-        return match.Success ? match.Groups["address"].Value.Trim() : string.Empty;
     }
 
     private async Task<string> GetLiquidityPriceAsync(string mintAddress)
@@ -205,7 +109,7 @@ class Program
 
     private static async Task ProcessMintAddressAsync(string mintAddress)
     {
-        // Check if the mintAddress is not already processed as invalid or valid
+        // Double check if the mintAddress is not already processed as invalid or valid
         if (!_invalidMintAddresses.ContainsKey(mintAddress) && !_validMintAddresses.ContainsKey(mintAddress))
         {
             bool isSafe = await SetSafetyLevel(mintAddress); // Determine safety level of the mintAddress
