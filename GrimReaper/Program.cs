@@ -87,7 +87,7 @@ class Program
         }
         catch (Exception)
         {
-        //error: 400
+            _invalidMintAddresses[mintAddress] = false;
         }
         return responseMsg;
     }
