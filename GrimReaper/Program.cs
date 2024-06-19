@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Configuration;
+using System.Data;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -18,6 +19,7 @@ class Program
     private readonly string _apiLiquidity;
     private static readonly Program _program = new Program();
     private static readonly Dictionary<string, bool> _mintAddresses = new Dictionary<string, bool>();
+    private Client _client;
 
     public Program()
     {
@@ -25,41 +27,46 @@ class Program
         _apiHash = ConfigurationManager.AppSettings["api_hash"];
         _phoneNumber = ConfigurationManager.AppSettings["phone_number"];
         _apiLiquidity = ConfigurationManager.AppSettings["api_liquidity"];
+        _client = new Client(Config);
     }
 
-    [Obsolete]
+    
     static async Task Main(string[] args)
     {
-        var timer = new System.Threading.Timer(async _ => await _program.Run(), null, TimeSpan.Zero, TimeSpan.FromMinutes(5));
-        await Task.Delay(Timeout.Infinite);
+        await _program.Run();
     }
 
-    [Obsolete]
     private async Task Run()
     {
         var cancellationTokenSource = new CancellationTokenSource();
 
-        // Generate a unique session file name based on the process ID or other unique identifier
-        string sessionFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"WTelegram_{Guid.NewGuid()}.session");
+        #region store custom session name
+        /*
+         // Generate a unique session file name based on the process ID or other unique identifier
+         string sessionFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"WTelegram_{Guid.NewGuid()}.session");
 
-        using var client = new Client(Config, sessionStore: new FileStream(sessionFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
+          using var client = new Client(Config, sessionStore: new FileStream(sessionFilePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
+         */
+        #endregion
+
+        //_client = new Client(Config);
         try
         {
-            await client.LoginUserIfNeeded();
+            await _client.LoginUserIfNeeded();
 
             // Interact with the bot
             var botUsername = "solanascanner";
-            var botPeer = await client.Contacts_ResolveUsername(botUsername);
+            var botPeer = await _client.Contacts_ResolveUsername(botUsername);
 
             // Fetch and print recent messages from the bot
-            await FetchAndPrintMessagesAsync(client, botPeer);
+            await FetchAndPrintMessagesAsync(_client, botPeer);
 
             // Handle bot responses
-            await ListenToBotResponsesAsync(client, botPeer, cancellationTokenSource.Token);
+            await ListenToBotResponsesAsync(_client, botPeer, cancellationTokenSource.Token);
         }
         finally
         {
-            client.Dispose();
+            _client.Dispose();
         }
     }
 
@@ -115,7 +122,28 @@ class Program
                 }
             }
         }
+        else if (update is UpdateUserStatus getLatestMessages)
+        {
+            await TryFetchALatesttMessagesAsync(_program._client, botPeer);
+        }
     }
+
+    private static async Task TryFetchALatesttMessagesAsync(Client client, InputPeer botPeer)
+    {
+        var history = await client.Messages_GetHistory(botPeer, limit: 40);
+        foreach (var messageBase in history.Messages)
+        {
+            if (messageBase is Message message)
+            {
+                string mintAddress = GetAddressFromBot(message.message);
+                if (!string.IsNullOrEmpty(mintAddress) && !_mintAddresses.ContainsKey(mintAddress))
+                {
+                    await ProcessMintAddressAsync(mintAddress);
+                }
+            }
+        }
+    }
+
 
 
     private static string GetAddressFromBot(string botMessage)
