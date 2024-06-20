@@ -10,9 +10,6 @@ using WTelegram;
 
 class Program
 {
-    private readonly string? _apiId;
-    private readonly string? _apiHash;
-    private readonly string? _phoneNumber;
     private readonly string? _apiLiquidity;
 
     private static readonly Program _program = new Program();
@@ -25,9 +22,6 @@ class Program
 
     public Program()
     {
-        _apiId = ConfigurationManager.AppSettings["app_id"];
-        _apiHash = ConfigurationManager.AppSettings["api_hash"];
-        _phoneNumber = ConfigurationManager.AppSettings["phone_number"];
         _apiLiquidity = ConfigurationManager.AppSettings["api_liquidity"];
     }
 
