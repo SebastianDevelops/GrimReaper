@@ -33,14 +33,16 @@ namespace GrimReaper.SolValidation
                     JsonElement lp = firstMarket.GetProperty("lp");
 
                     double basePrice = lp.GetProperty("basePrice").GetDouble();
-                    double liquidityPrice = lp.GetProperty("lpLockedUSD").GetDouble();
-                    double roundedLiquidityPrice = Math.Round(liquidityPrice, 1, MidpointRounding.AwayFromZero);
+                    decimal liquidityPrice = lp.GetProperty("lpLockedUSD").GetDecimal();
+                    decimal roundedLiquidityPrice = Math.Round(liquidityPrice, 1, MidpointRounding.AwayFromZero);
 
                     int score = root.GetProperty("score").GetInt32();
 
-                    bool hasFreezeAuthority = root.TryGetProperty("freezeAuthority", out JsonElement freezeAuth);                
+                    root.TryGetProperty("freezeAuthority", out JsonElement freezeAuth);
 
-                    return basePrice == 0 && score < 20410 && roundedLiquidityPrice >= 1000 && !hasFreezeAuthority;
+                    bool hasFreezeAuthority = freezeAuth.ValueKind != JsonValueKind.Null;
+
+                    return basePrice == 0 && score < 20410 && roundedLiquidityPrice >= 0 && !hasFreezeAuthority;
                 }
             }
             return false;
