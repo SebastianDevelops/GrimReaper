@@ -24,6 +24,7 @@ namespace GrimReaper.SolValidation
             string rugBodyResult = await GetLiquidityPriceAsync(mintAddress);
             if (!String.IsNullOrEmpty(rugBodyResult))
             {
+               
                 using JsonDocument document = JsonDocument.Parse(rugBodyResult);
                 JsonElement root = document.RootElement;
                 if (root.TryGetProperty("markets", out JsonElement markets) && markets.ValueKind == JsonValueKind.Array && markets.GetArrayLength() > 0)
@@ -36,8 +37,8 @@ namespace GrimReaper.SolValidation
                     double roundedLiquidityPrice = Math.Round(liquidityPrice, 1, MidpointRounding.AwayFromZero);
 
                     int score = root.GetProperty("score").GetInt32();
-                    string? freezeAuthority = root.GetProperty("freezeAuthority").GetString();
-                    bool hasFreezeAuthority = !String.IsNullOrEmpty(freezeAuthority);
+
+                    bool hasFreezeAuthority = root.TryGetProperty("freezeAuthority", out JsonElement freezeAuth);                
 
                     return basePrice == 0 && score < 20410 && roundedLiquidityPrice >= 1000 && !hasFreezeAuthority;
                 }

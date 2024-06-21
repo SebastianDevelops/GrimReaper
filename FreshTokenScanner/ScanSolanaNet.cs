@@ -38,7 +38,7 @@ namespace FreshTokenScanner
                 var preLaunchAddressList = new List<string>();
                 _limit = 50;
 
-                string reqUrl = $"{_apiUrl}/defi/tokenlist?sort_by=v24hUSD&sort_type=desc&offset={_offset}&limit={limit}";
+                string reqUrl = $"{_apiUrl}defi/tokenlist?sort_by=v24hUSD&sort_type=desc&offset={_offset}&limit={limit}";
                 reqUrl = await UpdateUrlOffset(reqUrl);
 
                 if(reqUrl == string.Empty)
