@@ -60,8 +60,8 @@ class Program
 
     private static async Task ProcessMintAddressAsync(string mintAddress)
     {
-        // Double check if the mintAddress is not already processed as invalid or valid
-        if (!_invalidMintAddresses.ContainsKey(mintAddress) && !_validMintAddresses.ContainsKey(mintAddress))
+        // Double check if the mintAddress is not valid already
+        if (!_validMintAddresses.ContainsKey(mintAddress))
         {
             bool isSafe = await SetSafetyLevel(mintAddress); // Determine safety level of the mintAddress
 
