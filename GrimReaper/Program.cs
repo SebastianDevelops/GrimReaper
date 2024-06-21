@@ -28,27 +28,32 @@ class Program
     {
         _mintAddresses = await _scanSolana.GetPreLaunchCoins();
 
+        foreach (var key in _invalidMintAddresses.Keys)
+        {
+            _mintAddresses.Add(key);
+        }
+
         await ReapSol();
     }
 
     private static async Task ReapSol()
     {
-        await CheckIfPreviousAddressValid();
-        foreach (var address in _mintAddresses)
+        if(_mintAddresses.Count > 0) 
         {
-            if (!String.IsNullOrEmpty(address) && 
-                !_invalidMintAddresses.ContainsKey(address) && 
-                !_validMintAddresses.ContainsKey(address))
+            foreach (var address in _mintAddresses)
             {
-                await ProcessMintAddressAsync(address);
-            }
-            else if(String.IsNullOrEmpty(address))
-            {
-                throw new Exception("Address values cannot be null");
-            }
-            else if(_validMintAddresses.ContainsKey(address))
-            {
-                //TODO: do the actual limit order here
+                if (!_validMintAddresses.ContainsKey(address))
+                {
+                    await ProcessMintAddressAsync(address);
+                }
+                else if (String.IsNullOrEmpty(address))
+                {
+                    Console.WriteLine("Address values cannot be null");
+                }
+                else if (_validMintAddresses.ContainsKey(address))
+                {
+                    //TODO: do the actual limit order here
+                }
             }
         }
     }
@@ -67,26 +72,6 @@ class Program
                 //todo: place the actual limit order
             }
         }
-    }
-
-    private static async Task CheckIfPreviousAddressValid()
-    {
-        var tasks = new List<Task>();
-
-        // Iterate through previously invalid addresses
-        foreach (var key in _invalidMintAddresses.Keys)
-        {
-            if (!_invalidMintAddresses[key])
-            {
-                tasks.Add(SetSafetyLevel(key));
-            }
-            else
-            {
-                Console.WriteLine($"{key} is now valid");
-            }
-        }
-
-        await Task.WhenAll(tasks); // Wait for all tasks to complete
     }
 
     private static async Task<bool> SetSafetyLevel(string mintAddress)
