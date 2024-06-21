@@ -61,7 +61,7 @@ namespace GrimReaper.SolValidation
             }
             else
             {
-                throw new Exception("Rug check api url is null");
+                Console.WriteLine("Rug check api url is null");
             }
 
             return responseMsg;
