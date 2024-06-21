@@ -1,30 +1,18 @@
 ﻿using FreshTokenScanner;
+using GrimReaper.SolValidation;
 using System.Collections.Concurrent;
-using System.Configuration;
-using System.Net.Http.Headers;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using TelegramBot;
-using TL;
-using WTelegram;
 
 class Program
 {
-    private readonly string? _apiLiquidity;
-
     private static readonly Program _program = new Program();
     private static readonly ScanSolanaNet _scanSolana = new ScanSolanaNet();
     private static readonly MrMeeSeeks _mrMeeSeeks = new MrMeeSeeks();
+    private static readonly CoinValidation _coinCheck = new CoinValidation();
 
     private static readonly ConcurrentDictionary<string, bool> _invalidMintAddresses = new ConcurrentDictionary<string, bool>();
     private static readonly ConcurrentDictionary<string, bool> _validMintAddresses = new ConcurrentDictionary<string, bool>();
     private static List<string> _mintAddresses = new List<string>();
-
-    public Program()
-    {
-        _apiLiquidity = ConfigurationManager.AppSettings["api_liquidity"];
-    }
-
 
 
     static async Task Main(string[] args)
@@ -65,47 +53,6 @@ class Program
         }
     }
 
-    private async Task<string> GetLiquidityPriceAsync(string mintAddress)
-    {
-        string responseMsg = String.Empty;
-        try
-        {
-            string fullUrl = $"{_apiLiquidity.TrimEnd('/')}/v1/tokens/{mintAddress}/report";
-            using HttpClient client = new HttpClient();
-            client.DefaultRequestHeaders.Accept.Clear();
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            HttpResponseMessage response = await client.GetAsync(fullUrl);
-            response.EnsureSuccessStatusCode();
-            responseMsg = await response.Content.ReadAsStringAsync();
-
-        }
-        catch (Exception)
-        {
-            _invalidMintAddresses[mintAddress] = false;
-        }
-        return responseMsg;
-    }
-
-    private static async Task<bool> IsRugSafeAddressAsync(string mintAddress)
-    {
-        string rugBodyResult = await _program.GetLiquidityPriceAsync(mintAddress);
-        if(!String.IsNullOrEmpty(rugBodyResult))
-        {
-            using JsonDocument document = JsonDocument.Parse(rugBodyResult);
-            JsonElement root = document.RootElement;
-            if (root.TryGetProperty("markets", out JsonElement markets) && markets.ValueKind == JsonValueKind.Array && markets.GetArrayLength() > 0)
-            {
-                JsonElement firstMarket = markets[0];
-                JsonElement lp = firstMarket.GetProperty("lp");
-                double basePrice = lp.GetProperty("basePrice").GetDouble();
-                double liquidityPrice = lp.GetProperty("baseUSD").GetDouble();
-                int score = root.GetProperty("score").GetInt32();
-                return basePrice == 0 && score < 20410 && liquidityPrice > 1000;
-            }
-        }
-        return false;
-    }
-
     private static async Task ProcessMintAddressAsync(string mintAddress)
     {
         // Double check if the mintAddress is not already processed as invalid or valid
@@ -135,7 +82,7 @@ class Program
             }
             else
             {
-                Console.WriteLine($"{key} is now true");
+                Console.WriteLine($"{key} is now valid");
             }
         }
 
@@ -145,22 +92,28 @@ class Program
     private static async Task<bool> SetSafetyLevel(string mintAddress)
     {
         bool isSafe = false;
-
-        if (!string.IsNullOrEmpty(mintAddress))
+        try
         {
-            isSafe = await IsRugSafeAddressAsync(mintAddress);
+            if (!string.IsNullOrEmpty(mintAddress))
+            {
+                isSafe = await _coinCheck.IsCoinValidAsync(mintAddress);
 
-            if (!isSafe)
-            {
-                _invalidMintAddresses.TryAdd(mintAddress, isSafe);
-            }
-            else
-            {
-                _validMintAddresses.TryAdd(mintAddress, isSafe);
-                Console.WriteLine($"{mintAddress} is now safe");
+                if (!isSafe)
+                {
+                    _invalidMintAddresses.TryAdd(mintAddress, isSafe);
+                }
+                else
+                {
+                    _validMintAddresses.TryAdd(mintAddress, isSafe);
+                    Console.WriteLine($"{mintAddress} is now safe");
+                }
             }
         }
-
+        catch
+        {
+            _invalidMintAddresses[mintAddress] = isSafe;
+        }
+        
         return isSafe;
     }
 }
