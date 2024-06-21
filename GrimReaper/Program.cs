@@ -50,6 +50,10 @@ class Program
                 {
                     Console.WriteLine("Address values cannot be null");
                 }
+                else if (_validMintAddresses.ContainsKey(address))
+                {
+                    //TODO: do the actual limit order here
+                }
             }
         }
     }
