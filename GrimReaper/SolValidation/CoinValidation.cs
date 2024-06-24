@@ -50,22 +50,27 @@ namespace GrimReaper.SolValidation
         private async Task<string> GetLiquidityPriceAsync(string mintAddress)
         {
             string responseMsg = String.Empty;
-
-            if (!String.IsNullOrEmpty(_apiRugChecker))
+            try
             {
-                string fullUrl = $"{_apiRugChecker.TrimEnd('/')}/v1/tokens/{mintAddress}/report";
-                using HttpClient client = new HttpClient();
-                client.DefaultRequestHeaders.Accept.Clear();
-                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-                HttpResponseMessage response = await client.GetAsync(fullUrl);
-                response.EnsureSuccessStatusCode();
-                responseMsg = await response.Content.ReadAsStringAsync();
+                if (!String.IsNullOrEmpty(_apiRugChecker))
+                {
+                    string fullUrl = $"{_apiRugChecker.TrimEnd('/')}/v1/tokens/{mintAddress}/report";
+                    using HttpClient client = new HttpClient();
+                    client.DefaultRequestHeaders.Accept.Clear();
+                    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                    HttpResponseMessage response = await client.GetAsync(fullUrl);
+                    response.EnsureSuccessStatusCode();
+                    responseMsg = await response.Content.ReadAsStringAsync();
+                }
+                else
+                {
+                    Console.WriteLine("Rug check api url is null");
+                }
             }
-            else
+            catch (Exception)
             {
-                Console.WriteLine("Rug check api url is null");
+                return responseMsg;
             }
-
             return responseMsg;
         }
 

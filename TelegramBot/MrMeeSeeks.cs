@@ -1,28 +1,29 @@
-﻿using System;
-using System.Configuration;
+﻿using System.Configuration;
 using Telegram.Bot;
+using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Polling;
 
 
 namespace TelegramBot
 {
     public class MrMeeSeeks
     {
-        private readonly string? _botToken;
+        private static readonly string? _botToken = ConfigurationManager.AppSettings["bot_token"];
 
-        public MrMeeSeeks()
-        {
-            _botToken = ConfigurationManager.AppSettings["bot_token"];
-        }
+        TelegramBotClient botClient = new TelegramBotClient(_botToken);
 
-        public async Task Speak()
+        public async Task SaySafeAddress(string mintAddress)
         {
-            if(_botToken != null)
+            // StartReceiving does not block the caller thread. Receiving is done on the ThreadPool.
+            ReceiverOptions receiverOptions = new()
             {
-                var botClient = new TelegramBotClient(_botToken);
+                AllowedUpdates = Array.Empty<UpdateType>() 
+            };
 
-                var me = await botClient.GetMeAsync();
-                Console.WriteLine($"Hello, World! I am user {me.Id} and my name is {me.FirstName}.");
-            }
+            await botClient.SendTextMessageAsync(
+                chatId: -4265759290,
+                disableNotification: true,
+                text: $"{mintAddress}");
         }
     }
 }

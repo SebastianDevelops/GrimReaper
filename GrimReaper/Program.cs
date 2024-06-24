@@ -1,6 +1,7 @@
 ﻿using FreshTokenScanner;
 using GrimReaper.SolValidation;
 using System.Collections.Concurrent;
+using System.Net;
 using TelegramBot;
 using TransactionProcessing;
 
@@ -19,6 +20,7 @@ class Program
 
     static async Task Main(string[] args)
     {
+
         while (true)
         {
             await _program.Run();
@@ -45,6 +47,7 @@ class Program
             foreach (var address in _mintAddresses)
             {
                 var check = await _coinStats.MarketCap(address);
+                
                 if (await _coinCheck.IsPumpFun(address)) 
                 {
                 }
@@ -72,6 +75,7 @@ class Program
             if (isSafe)
             {
                 //todo: place the actual limit order
+                await _mrMeeSeeks.SaySafeAddress(mintAddress);
             }
         }
     }
