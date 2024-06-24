@@ -52,10 +52,6 @@ class Program
                 {
                     await ProcessMintAddressAsync(address);
                 }
-                else if (String.IsNullOrEmpty(address))
-                {
-                    Console.WriteLine("Address values cannot be null");
-                }
                 else if (_validMintAddresses.ContainsKey(address))
                 {
                     //TODO: do the actual limit order here
@@ -96,6 +92,9 @@ class Program
                 else
                 {
                     _validMintAddresses.TryAdd(mintAddress, isSafe);
+
+                    _invalidMintAddresses.Remove(mintAddress, out var removed);
+
                     Console.WriteLine($"{mintAddress} is now safe");
                 }
             }

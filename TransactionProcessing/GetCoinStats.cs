@@ -68,35 +68,40 @@ namespace TransactionProcessing
         public async Task<UInt64> CirculatingSupply(string mintAddress)
         {
             UInt64 supply = default;
-
-            if (!String.IsNullOrEmpty(_rugUrl))
+            try
             {
-                string reqUrl = $"{_rugUrl.TrimEnd('/')}/v1/tokens/{mintAddress}/report";
-
-                var options = new RestClientOptions(reqUrl);
-                var client = new RestClient(options);
-                var request = new RestRequest("");
-
-                var response = await client.GetAsync(request);
-
-                var responseMsg = response.Content;
-
-                if (!String.IsNullOrEmpty(responseMsg))
+                if (!String.IsNullOrEmpty(_rugUrl))
                 {
-                    using (JsonDocument document = JsonDocument.Parse(responseMsg))
+                    string reqUrl = $"{_rugUrl.TrimEnd('/')}/v1/tokens/{mintAddress}/report";
+
+                    var options = new RestClientOptions(reqUrl);
+                    var client = new RestClient(options);
+                    var request = new RestRequest("");
+
+                    var response = await client.GetAsync(request);
+
+                    var responseMsg = response.Content;
+
+                    if (!String.IsNullOrEmpty(responseMsg))
                     {
-                        JsonElement root = document.RootElement;
+                        using (JsonDocument document = JsonDocument.Parse(responseMsg))
+                        {
+                            JsonElement root = document.RootElement;
 
-                        var tokenInfo = root.GetProperty("token");
+                            var tokenInfo = root.GetProperty("token");
 
-                        if(tokenInfo.ValueKind != JsonValueKind.Null)
-                            supply = tokenInfo.GetProperty("supply").GetUInt64();
+                            if (tokenInfo.ValueKind != JsonValueKind.Null)
+                                supply = tokenInfo.GetProperty("supply").GetUInt64();
+                        }
                     }
                 }
+
+                return supply;
             }
-
-            return supply;
+            catch (Exception)
+            {
+                return supply;
+            }
         }
-
     }
 }
