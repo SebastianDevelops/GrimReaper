@@ -42,7 +42,10 @@ class Program
         {
             foreach (var address in _mintAddresses)
             {
-                if (!_validMintAddresses.ContainsKey(address))
+                if(await _coinCheck.IsPumpFun(address)) 
+                {
+                }
+                else if (!_validMintAddresses.ContainsKey(address))
                 {
                     await ProcessMintAddressAsync(address);
                 }

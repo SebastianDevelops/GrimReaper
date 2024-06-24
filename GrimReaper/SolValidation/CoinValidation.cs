@@ -13,6 +13,7 @@ namespace GrimReaper.SolValidation
     public class CoinValidation
     {
         private readonly string? _apiRugChecker;
+        const string hotAuthAddress = "TSLvdd1pWpHVjahSpsvCXUbgwsL3JAcvokwaKt1eokM";
 
         public CoinValidation()
         {
@@ -24,26 +25,24 @@ namespace GrimReaper.SolValidation
             string rugBodyResult = await GetLiquidityPriceAsync(mintAddress);
             if (!String.IsNullOrEmpty(rugBodyResult))
             {
-               
+
                 using JsonDocument document = JsonDocument.Parse(rugBodyResult);
                 JsonElement root = document.RootElement;
-                if (root.TryGetProperty("markets", out JsonElement markets) && markets.ValueKind == JsonValueKind.Array && markets.GetArrayLength() > 0)
-                {
-                    JsonElement firstMarket = markets[0];
-                    JsonElement lp = firstMarket.GetProperty("lp");
 
-                    double basePrice = lp.GetProperty("basePrice").GetDouble();
-                    decimal liquidityPrice = lp.GetProperty("lpLockedUSD").GetDecimal();
-                    decimal roundedLiquidityPrice = Math.Round(liquidityPrice, 1, MidpointRounding.AwayFromZero);
+                var tokenMeta = root.GetProperty("tokenMeta");
+                string? tokenAuthAddress = tokenMeta.GetProperty("updateAuthority").GetString();
 
-                    int score = root.GetProperty("score").GetInt32();
+                int score = root.GetProperty("score").GetInt32();
 
-                    root.TryGetProperty("freezeAuthority", out JsonElement freezeAuth);
+                root.TryGetProperty("freezeAuthority", out JsonElement freezeAuth);
+                root.TryGetProperty("mintAuthority", out JsonElement mintAuth);
 
-                    bool hasFreezeAuthority = freezeAuth.ValueKind != JsonValueKind.Null;
 
-                    return basePrice == 0 && score < 20410 && roundedLiquidityPrice >= 0 && !hasFreezeAuthority;
-                }
+                bool hasFreezeAuthority = freezeAuth.ValueKind != JsonValueKind.Null;
+                bool hasMintAuthority = mintAuth.ValueKind != JsonValueKind.Null;
+
+                return score < 20410 && !hasMintAuthority && !hasFreezeAuthority;
+
             }
             return false;
         }
@@ -51,8 +50,8 @@ namespace GrimReaper.SolValidation
         private async Task<string> GetLiquidityPriceAsync(string mintAddress)
         {
             string responseMsg = String.Empty;
-            
-            if(!String.IsNullOrEmpty(_apiRugChecker))
+
+            if (!String.IsNullOrEmpty(_apiRugChecker))
             {
                 string fullUrl = $"{_apiRugChecker.TrimEnd('/')}/v1/tokens/{mintAddress}/report";
                 using HttpClient client = new HttpClient();
@@ -68,6 +67,23 @@ namespace GrimReaper.SolValidation
             }
 
             return responseMsg;
+        }
+
+        public async Task<bool> IsPumpFun(string mintAddress)
+        {
+            string rugBodyResult = await GetLiquidityPriceAsync(mintAddress);
+            if (!String.IsNullOrEmpty(rugBodyResult))
+            {
+
+                using JsonDocument document = JsonDocument.Parse(rugBodyResult);
+                JsonElement root = document.RootElement;
+
+                var tokenMeta = root.GetProperty("tokenMeta");
+                string? tokenAuthAddress = tokenMeta.GetProperty("updateAuthority").GetString();
+
+                return hotAuthAddress == tokenAuthAddress;
+            }
+            return false;
         }
 
     }
