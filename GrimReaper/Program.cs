@@ -2,6 +2,7 @@
 using GrimReaper.SolValidation;
 using System.Collections.Concurrent;
 using TelegramBot;
+using TransactionProcessing;
 
 class Program
 {
@@ -9,6 +10,7 @@ class Program
     private static readonly ScanSolanaNet _scanSolana = new ScanSolanaNet();
     private static readonly MrMeeSeeks _mrMeeSeeks = new MrMeeSeeks();
     private static readonly CoinValidation _coinCheck = new CoinValidation();
+    private static readonly GetCoinStats _coinStats = new GetCoinStats();
 
     private static readonly ConcurrentDictionary<string, bool> _invalidMintAddresses = new ConcurrentDictionary<string, bool>();
     private static readonly ConcurrentDictionary<string, bool> _validMintAddresses = new ConcurrentDictionary<string, bool>();
@@ -20,7 +22,7 @@ class Program
         while (true)
         {
             await _program.Run();
-            await Task.Delay(TimeSpan.FromMinutes(5));
+            await Task.Delay(TimeSpan.FromMinutes(1));
         }
     }
 
@@ -42,7 +44,8 @@ class Program
         {
             foreach (var address in _mintAddresses)
             {
-                if(await _coinCheck.IsPumpFun(address)) 
+                var check = await _coinStats.MarketCap(address);
+                if (await _coinCheck.IsPumpFun(address)) 
                 {
                 }
                 else if (!_validMintAddresses.ContainsKey(address))

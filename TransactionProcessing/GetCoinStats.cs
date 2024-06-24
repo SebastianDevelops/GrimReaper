@@ -21,7 +21,7 @@ namespace TransactionProcessing
 
         public async Task<decimal> MarketCap(string mintAddress)
         {
-            long circulatingSupply = await CirculatingSupply(mintAddress);
+            ulong circulatingSupply = await CirculatingSupply(mintAddress);
             decimal currentPrice = await CurrentPrice(mintAddress);
             decimal mc = default;
 
@@ -56,10 +56,8 @@ namespace TransactionProcessing
                     {
                         JsonElement root = document.RootElement;
                         
-                        if (root.TryGetProperty("data", out JsonElement data))
-                        {
-                            currentPrice = data.GetProperty("value").GetDecimal();
-                        }
+                        if (root.TryGetProperty("data", out JsonElement data) && data.ValueKind != JsonValueKind.Null)
+                            data.GetProperty("value").TryGetDecimal(out currentPrice);
                     }
                 }
             }
@@ -67,9 +65,9 @@ namespace TransactionProcessing
             return currentPrice;
         }
 
-        public async Task<Int64> CirculatingSupply(string mintAddress)
+        public async Task<UInt64> CirculatingSupply(string mintAddress)
         {
-            Int64 supply = default;
+            UInt64 supply = default;
 
             if (!String.IsNullOrEmpty(_rugUrl))
             {
@@ -91,7 +89,8 @@ namespace TransactionProcessing
 
                         var tokenInfo = root.GetProperty("token");
 
-                        supply = tokenInfo.GetProperty("supply").GetInt64();
+                        if(tokenInfo.ValueKind != JsonValueKind.Null)
+                            supply = tokenInfo.GetProperty("supply").GetUInt64();
                     }
                 }
             }
